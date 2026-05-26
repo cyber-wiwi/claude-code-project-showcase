@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build-A-Man!</title>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #FFF5D6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 12px 40px;
+  font-family: 'Nunito', sans-serif;
+  overflow-x: hidden;
+}
+h1 {
+  font-family: 'Bangers', cursive;
+  font-size: clamp(2.2em, 7vw, 3.6em);
+  color: #FF4820;
+  text-shadow: 3px 4px 0 #7B1800;
+  letter-spacing: 5px;
+  margin-bottom: 2px;
+}
+.sub { font-size:.9em; color:#7B5A20; margin-bottom:14px; }
+
+#canvas-wrap {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 4px solid #3A1800;
+  box-shadow: 0 8px 0 #3A1800, 0 12px 24px rgba(0,0,0,.28);
+  max-width: 100%;
+  line-height: 0;
+}
+canvas { display:block; max-width:100%; }
+
+#status {
+  display: flex; gap:14px; margin: 12px 0 2px;
+  align-items: center; flex-wrap: wrap; justify-content: center;
+}
+.badge {
+  background: white;
+  border: 3px solid #3A1800;
+  border-radius: 20px;
+  padding: 3px 14px;
+  font-family: 'Bangers', cursive;
+  font-size: 1.15em;
+  color: #3A1800;
+  box-shadow: 0 3px 0 #3A1800;
+}
+.badge span { color:#FF4820; }
+
+#message {
+  font-family: 'Bangers', cursive;
+  font-size: 1.4em;
+  min-height: 34px;
+  text-align: center;
+  padding: 0 10px;
+  transition: transform .18s;
+  color: #3A1800;
+}
+
+#word-display {
+  display: flex; gap:5px; justify-content:center;
+  flex-wrap: wrap; margin: 8px 0; min-height:58px;
+}
+.slot {
+  width: 36px; height: 50px;
+  border-bottom: 4px solid #3A1800;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Bangers', cursive;
+  font-size: 1.8em; line-height:1;
+}
+.slot.hit { color: #1A7A1A; animation: popIn .35s cubic-bezier(.175,.885,.32,1.275) both; }
+.slot.miss { color: #CC2020; animation: popIn .35s cubic-bezier(.175,.885,.32,1.275) both; }
+@keyframes popIn {
+  from { transform: scale(0) rotate(-15deg); }
+  to   { transform: scale(1) rotate(0); }
+}
+
+#keyboard { display:flex; flex-direction:column; gap:5px; align-items:center; margin-top:10px; }
+.kb-row { display:flex; gap:5px; }
+.key {
+  width:40px; height:40px;
+  border-radius:8px; border:3px solid #3A1800; background: white;
+  font-family:'Bangers',cursive; font-size:1.1em; cursor:pointer;
+  box-shadow: 0 4px 0 #3A1800;
+  transition: transform .1s, box-shadow .1s, background .18s;
+  color:#3A1800; user-select:none;
+  display:flex; align-items:center; justify-content:center;
+}
+.key:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 6px 0 #3A1800; background:#FFD93D; }
+.key:active:not(:disabled) { transform:translateY(3px); box-shadow:0 1px 0 #3A1800; }
+.key:disabled { opacity:.3; cursor:default; transform:none; box-shadow:none; }
+.key.hit  { background:#6BCB77 !important; color:white; }
+.key.miss { background:#FF6B6B !important; color:white; }
+
+#overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.65);
+  display:flex; align-items:center; justify-content:center;
+  z-index:200; opacity:0; pointer-events:none; transition: opacity .4s;
+}
+#overlay.on { opacity:1; pointer-events:all; }
+#ov-box {
+  background:#FFF5D6; border:5px solid #3A1800; border-radius:28px;
+  padding:34px 46px; box-shadow:0 10px 0 #3A1800;
+  text-align:center; max-width:360px; width:90%;
+}
+#ov-box h2 { font-family:'Bangers',cursive; font-size:2.8em; letter-spacing:2px; margin-bottom:8px; }
+#ov-box p  { font-size:1.05em; color:#5A3F10; margin-bottom:18px; }
+#ov-box strong { color:#FF4820; font-size:1.4em; }
+#play-btn {
+  font-family:'Bangers',cursive; font-size:1.55em; padding:11px 34px;
+  background:#FFD93D; border:3px solid #3A1800; border-radius:14px; cursor:pointer;
+  box-shadow:0 5px 0 #3A1800; letter-spacing:1px; transition: transform .1s, box-shadow .1s;
+}
+#play-btn:hover  { transform:translateY(-2px); box-shadow:0 7px 0 #3A1800; }
+#play-btn:active { transform:translateY(4px);  box-shadow:0 1px 0 #3A1800; }
+@keyframes bounceIn {
+  0%   { transform:scale(.2) rotate(-8deg); opacity:0; }
+  60%  { transform:scale(1.08) rotate(2deg); opacity:1; }
+  100% { transform:scale(1) rotate(0deg); opacity:1; }
+}
+</style>
+</head>
+<body>
+
+<h1>BUILD&#8209;A&#8209;MAN</h1>
+<p class="sub">Guess the word before the stick man is fully assembled!</p>
+
+<div id="status">
+  <div class="badge">Parts built: <span id="parts">0</span>/8</div>
+  <div class="badge">Letters left: <span id="left">?</span></div>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="c" width="560" height="300"></canvas>
+</div>
+
+<div id="message">Pick a letter to start!</div>
+<div id="word-display"></div>
+<div id="keyboard"></div>
+
+<div id="overlay">
+  <div id="ov-box">
+    <h2 id="ov-title"></h2>
+    <p id="ov-body"></p>
+    <button id="play-btn" onclick="initGame()">Play Again!</button>
+  </div>
+</div>
+
+<script>
+// ─── constants ────────────────────────────────────────────────────────────────
+const WORDS = [
+  'python','javascript','algorithm','database','network','keyboard','monitor',
+  'software','hardware','function','variable','elephant','umbrella','pyramid',
+  'wizard','dragon','castle','treasure','mystery','adventure','carnival',
+  'phantom','lantern','crystal','tornado','serpent','labyrinth','volcano',
+  'giraffe','dolphin','penguin','octopus','leopard','hamster','sparrow',
+];
+const PARTS     = ['head','body','leftArm','rightArm','leftLeg','rightLeg','leftFoot','rightFoot'];
+const PART_MSGS = ['Head is on!','Body attached!','Left arm done!','Right arm done!',
+                   'Left leg on!','Right leg on!','Left foot!','Right foot — COMPLETE! 😱'];
+const LCOLORS   = ['#FF6B6B','#FFD93D','#6BCB77','#4DA1E8','#C77DFF','#FF9A3C','#FF6BCD'];
+const MAX_BAD   = 8;
+
+// ─── canvas ───────────────────────────────────────────────────────────────────
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const CW  = 560, CH = 300;
+const GROUND_Y = CH - 28;
+const PLAT_Y   = GROUND_Y - 26;
+
+// ─── game state ───────────────────────────────────────────────────────────────
+let word, guessed, badCount, phase;
+
+let sc = {};
+PARTS.forEach(p => sc[p] = 0);
+let popQueue = [], popPart = null, popT = 0;
+
+// run/comedy animation
+let run = {
+  on: false, x: 0, vx: 0, t: 0, dust: [],
+  subphase: 'sprint',  // 'sprint' | 'horizon' | 'poof'
+  scale: 1, horizonT: 0, waveT: 0,
+  poofT: 0, poofParticles: [],
+  speechT: 0,
+};
+
+// letter fall
+let fall = { on: false, done: false, letters: [], t0: 0 };
+
+// win flash
+let flash = { on: false, t: 0 };
+
+let gT = 0, prevT = 0;
+
+// ─── drawing utils ────────────────────────────────────────────────────────────
+function rrect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r); ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+function easeElastic(t){
+  const c4=(2*Math.PI)/3;
+  return t<=0?0:t>=1?1:Math.pow(2,-10*t)*Math.sin((t*10-.75)*c4)+1;
+}
+// rotate vector [dx,dy] by angle
+function rot(dx,dy,a){ return [dx*Math.cos(a)-dy*Math.sin(a), dx*Math.sin(a)+dy*Math.cos(a)]; }
+
+// ─── background ──────────────────────────────────────────────────────────────
+function drawBG(){
+  const sg=ctx.createLinearGradient(0,0,0,GROUND_Y);
+  sg.addColorStop(0,'#6EC6E8'); sg.addColorStop(1,'#C8ECFF');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,CW,GROUND_Y);
+
+  ctx.save(); ctx.translate(52,46);
+  const sunG=ctx.createRadialGradient(0,0,8,0,0,30);
+  sunG.addColorStop(0,'#FFF176'); sunG.addColorStop(1,'#FFD700');
+  ctx.fillStyle=sunG; ctx.strokeStyle='#FFA500'; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='#FFD700'; ctx.lineWidth=3; ctx.lineCap='round';
+  for(let i=0;i<10;i++){
+    const a=(i/10)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(Math.cos(a)*34,Math.sin(a)*34);
+    ctx.lineTo(Math.cos(a)*46,Math.sin(a)*46); ctx.stroke();
+  }
+  ctx.restore();
+
+  drawCloud(155,50,.9); drawCloud(370,35,1.0); drawCloud(492,62,.72);
+
+  ctx.fillStyle='#5AAA35'; ctx.fillRect(0,GROUND_Y,CW,CH-GROUND_Y);
+  ctx.fillStyle='#78CA52'; ctx.fillRect(0,GROUND_Y,CW,10);
+
+  // platform
+  ctx.save();
+  ctx.fillStyle='#D4956A';
+  rrect(192,PLAT_Y-2,176,28,8); ctx.fill();
+  ctx.strokeStyle='#8B4A28'; ctx.lineWidth=3; ctx.stroke();
+  ctx.lineWidth=6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(218,PLAT_Y+26); ctx.lineTo(218,GROUND_Y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(342,PLAT_Y+26); ctx.lineTo(342,GROUND_Y); ctx.stroke();
+  ctx.restore();
+}
+
+function drawCloud(cx,cy,s){
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(s,s);
+  ctx.fillStyle='rgba(255,255,255,.88)';
+  for(const[x,y,r] of [[0,0,22],[-18,6,17],[18,6,17],[-6,9,15],[6,9,15]]){
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ─── stick figure ─────────────────────────────────────────────────────────────
+// cx, cy = foot level. scm = per-part scales.
+// legA = leg swing, armA = arm swing, bobY = vertical bob.
+// scale = whole-man scale (for horizon shrink). expr = expression override.
+// waveArm = true to make right arm wave up.
+function drawMan(cx, cy, scm, legA=0, armA=0, bobY=0, scale=1, expr=null, waveArm=false){
+  if(!expr) expr = badCount>=7?'scared': badCount>=4?'worried':'happy';
+
+  ctx.save();
+  ctx.translate(cx, cy + bobY);
+  ctx.scale(scale, scale);
+
+  const C   = '#3A1800';
+  const LW  = 4.5;
+  const HLW = 3;   // thinner lines for hands/feet
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // Anchor Y coordinates (relative to translated origin = foot level)
+  const HIP_Y      = -52;
+  const SHOULDER_Y = -92;
+  const NECK_Y     = -104;
+  const HEAD_Y     = -122;  // head center
+
+  // ── right foot ──
+  if(scm.rightFoot>0){
+    const [ldx, ldy] = rot(14,52, legA*.5);
+    const fx = ldx, fy = HIP_Y + ldy;
+    ctx.save(); ctx.globalAlpha = scm.rightFoot;
+    ctx.strokeStyle=C; ctx.lineWidth=HLW;
+    ctx.beginPath(); ctx.moveTo(fx-4,fy); ctx.lineTo(fx+12,fy); ctx.stroke();
+    ctx.restore();
+  }
+  // ── left foot ──
+  if(scm.leftFoot>0){
+    const [ldx, ldy] = rot(-14,52, -legA*.5);
+    const fx = ldx, fy = HIP_Y + ldy;
+    ctx.save(); ctx.globalAlpha = scm.leftFoot;
+    ctx.strokeStyle=C; ctx.lineWidth=HLW;
+    ctx.beginPath(); ctx.moveTo(fx-4,fy); ctx.lineTo(fx+12,fy); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── right leg ──
+  if(scm.rightLeg>0){
+    ctx.save(); ctx.globalAlpha = scm.rightLeg;
+    ctx.strokeStyle=C; ctx.lineWidth=LW;
+    const [dx,dy] = rot(14,52, legA*.5);
+    ctx.beginPath(); ctx.moveTo(0,HIP_Y); ctx.lineTo(dx, HIP_Y+dy); ctx.stroke();
+    ctx.restore();
+  }
+  // ── left leg ──
+  if(scm.leftLeg>0){
+    ctx.save(); ctx.globalAlpha = scm.leftLeg;
+    ctx.strokeStyle=C; ctx.lineWidth=LW;
+    const [dx,dy] = rot(-14,52, -legA*.5);
+    ctx.beginPath(); ctx.moveTo(0,HIP_Y); ctx.lineTo(dx, HIP_Y+dy); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── body ──
+  if(scm.body>0){
+    ctx.save(); ctx.globalAlpha = scm.body;
+    ctx.strokeStyle=C; ctx.lineWidth=LW;
+    ctx.beginPath(); ctx.moveTo(0,NECK_Y); ctx.lineTo(0,HIP_Y); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── right arm ──
+  if(scm.rightArm>0){
+    ctx.save(); ctx.globalAlpha = scm.rightArm;
+    ctx.strokeStyle=C; ctx.lineWidth=LW;
+    const angle = waveArm ? armA*1.2 - 0.6 : armA*.5 + 0.45;
+    const [dx,dy] = rot(38,28, angle);
+    ctx.beginPath(); ctx.moveTo(0,SHOULDER_Y); ctx.lineTo(dx, SHOULDER_Y+dy); ctx.stroke();
+    ctx.restore();
+  }
+  // ── left arm ──
+  if(scm.leftArm>0){
+    ctx.save(); ctx.globalAlpha = scm.leftArm;
+    ctx.strokeStyle=C; ctx.lineWidth=LW;
+    const [dx,dy] = rot(-38,28, -armA*.5);
+    ctx.beginPath(); ctx.moveTo(0,SHOULDER_Y); ctx.lineTo(dx, SHOULDER_Y+dy); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── head ──
+  if(scm.head>0){
+    ctx.save(); ctx.globalAlpha = scm.head;
+
+    // Head circle
+    ctx.fillStyle='#FFF5E0'; ctx.strokeStyle=C; ctx.lineWidth=3.5;
+    ctx.beginPath(); ctx.arc(0, HEAD_Y, 18, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+    // Eyes
+    const eyeY = HEAD_Y - 3;
+    const scared = (expr==='scared');
+    ctx.fillStyle = C;
+    if(scared){
+      // wide eyes (open circles)
+      ctx.strokeStyle=C; ctx.lineWidth=2; ctx.fillStyle='white';
+      ctx.beginPath(); ctx.arc(-7,eyeY,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(7,eyeY,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=C;
+      ctx.beginPath(); ctx.arc(-7,eyeY,2.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7,eyeY,2.5,0,Math.PI*2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(-7,eyeY,3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(7,eyeY,3,0,Math.PI*2); ctx.fill();
+    }
+
+    // Eyebrows
+    ctx.strokeStyle=C; ctx.lineWidth=2.5; ctx.lineCap='round';
+    if(expr==='happy'){
+      ctx.beginPath(); ctx.moveTo(-11,HEAD_Y-12); ctx.lineTo(-3,HEAD_Y-14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(3,HEAD_Y-14);   ctx.lineTo(11,HEAD_Y-12); ctx.stroke();
+    } else if(expr==='worried'){
+      ctx.beginPath(); ctx.moveTo(-11,HEAD_Y-14); ctx.lineTo(-3,HEAD_Y-11); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(3,HEAD_Y-11);   ctx.lineTo(11,HEAD_Y-14); ctx.stroke();
+    } else {
+      // scared: raised
+      ctx.beginPath(); ctx.moveTo(-11,HEAD_Y-16); ctx.lineTo(-3,HEAD_Y-13); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(3,HEAD_Y-13);   ctx.lineTo(11,HEAD_Y-16); ctx.stroke();
+    }
+
+    // Mouth
+    ctx.strokeStyle=C; ctx.lineWidth=2.5; ctx.lineCap='round';
+    if(expr==='happy'){
+      ctx.beginPath(); ctx.arc(0,HEAD_Y+4,7,.15*Math.PI,.85*Math.PI); ctx.stroke();
+    } else if(expr==='worried'){
+      ctx.beginPath(); ctx.arc(0,HEAD_Y+12,7,1.15*Math.PI,1.85*Math.PI); ctx.stroke();
+    } else {
+      // scared: small open O
+      ctx.beginPath(); ctx.arc(0,HEAD_Y+7,5,0,Math.PI*2); ctx.stroke();
+      // sweat drop
+      ctx.fillStyle='#90D8FF'; ctx.strokeStyle='#5BA0CF'; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(16,HEAD_Y-10); ctx.bezierCurveTo(20,-4+HEAD_Y,20,4+HEAD_Y,16,10+HEAD_Y);
+      ctx.bezierCurveTo(12,4+HEAD_Y,12,-4+HEAD_Y,16,-10+HEAD_Y);
+      ctx.fill(); ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+// ─── main loop ────────────────────────────────────────────────────────────────
+function loop(ts){
+  const dt = Math.min((ts-prevT)/1000, .05);
+  prevT=ts; gT+=dt;
+  ctx.clearRect(0,0,CW,CH);
+  drawBG();
+
+  // ── normal game / win flash ──
+  if(!run.on && !fall.on){
+    if(!popPart && popQueue.length){ popPart=popQueue.shift(); popT=0; }
+    if(popPart){
+      popT += dt*3.5;
+      if(popT>=1){ sc[popPart]=1; popPart=null; }
+      else        { sc[popPart]=easeElastic(popT); }
+    }
+    drawMan(CW/2, PLAT_Y, sc);
+
+    if(flash.on){
+      flash.t += dt;
+      ctx.fillStyle=`rgba(255,255,140,${Math.abs(Math.sin(flash.t*8))*.3})`;
+      ctx.fillRect(0,0,CW,CH);
+      if(flash.t>1.5){ flash.on=false; showOverlay(); }
+    }
+  }
+
+  // ── run / comedy animation ──
+  if(run.on) updateRun(dt);
+
+  // ── letter fall ──
+  if(fall.on) updateFall(dt);
+
+  requestAnimationFrame(loop);
+}
+
+// ─── comedy run ──────────────────────────────────────────────────────────────
+function updateRun(dt){
+  run.t += dt;
+  const full = {}; PARTS.forEach(p => full[p]=1);
+
+  if(run.subphase === 'sprint'){
+    run.vx  = Math.min(run.vx + 1200*dt, 600);
+    run.x  += run.vx * dt;
+
+    const legA = Math.sin(run.t*14) * .8;
+    const armA = Math.sin(run.t*14 + Math.PI) * .7;
+    const bobY = Math.abs(Math.sin(run.t*14)) * -9;
+
+    // dust
+    if(run.vx>80 && Math.random()<.4){
+      run.dust.push({
+        x:run.x-24+Math.random()*14, y:PLAT_Y-2,
+        vx:-40-Math.random()*80, vy:-20-Math.random()*90,
+        life:1, r:4+Math.random()*8
+      });
+    }
+    run.dust = run.dust.filter(d=>d.life>0);
+    for(const d of run.dust){
+      d.x+=d.vx*dt; d.y+=d.vy*dt; d.vy+=280*dt; d.life-=dt*2.2;
+      ctx.save(); ctx.globalAlpha=d.life*.4; ctx.fillStyle='#C8A070';
+      ctx.beginPath(); ctx.arc(d.x,d.y,d.r*d.life,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    drawMan(run.x, PLAT_Y, full, legA, armA, bobY, 1, 'scared');
+
+    // Switch to horizon phase when near right edge
+    if(run.x > CW * 0.68){
+      run.subphase = 'horizon';
+      run.horizonT = 0;
+    }
+
+  } else if(run.subphase === 'horizon'){
+    // Man "runs into the horizon" — shrinks, rises, waves
+    run.horizonT += dt * 0.55;
+    if(run.horizonT > 1) run.horizonT = 1;
+
+    // ease out: slow down as he recedes
+    const ease = 1 - Math.pow(1 - run.horizonT, 3);
+    run.scale = 1 - ease * 0.96;         // shrink to ~4%
+    const horizonX = run.x + ease * 40;  // drift slightly right
+    const horizonY = PLAT_Y - ease * 45; // rise over horizon
+
+    const legA = Math.sin(run.t*16) * (.8 - ease*.7);  // legs slow as he shrinks
+    const armA = Math.sin(run.t*16 + Math.PI) * .6;
+    const bobY = Math.abs(Math.sin(run.t*16)) * -(9 - ease*8);
+
+    // Speech bubble: "BYE BYE!!" when at ~50% size
+    if(run.scale > 0.28 && run.scale < 0.72){
+      const bx = horizonX, by = horizonY - 130 * run.scale - 10;
+      ctx.save();
+      ctx.fillStyle='white'; ctx.strokeStyle='#3A1800'; ctx.lineWidth=2;
+      rrect(bx-34, by-22, 68, 26, 8); ctx.fill(); ctx.stroke();
+      // bubble tail
+      ctx.beginPath(); ctx.moveTo(bx-4, by+4); ctx.lineTo(bx+6, by+14); ctx.lineTo(bx+14, by+4); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle='#FF4820'; ctx.font="bold 13px 'Bangers', cursive";
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('BYE BYE!! 👋', bx, by-9);
+      ctx.restore();
+    }
+
+    // Waving arm flag: yes for right arm
+    drawMan(horizonX, horizonY, full, legA, armA, bobY, run.scale, 'scared', true);
+
+    // Trigger poof when tiny
+    if(run.horizonT >= 1){
+      run.subphase = 'poof';
+      run.poofT = 0;
+      run.poofX = horizonX;
+      run.poofY = horizonY - 60 * run.scale;
+      // spawn burst particles
+      for(let i=0; i<18; i++){
+        const a = (i/18)*Math.PI*2;
+        const spd = 40+Math.random()*120;
+        run.poofParticles.push({
+          x:0, y:0, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
+          r:4+Math.random()*7, life:1,
+          color:LCOLORS[i%LCOLORS.length]
+        });
+      }
+    }
+
+  } else if(run.subphase === 'poof'){
+    run.poofT += dt;
+
+    // Particles
+    run.poofParticles = run.poofParticles.filter(p=>p.life>0);
+    for(const p of run.poofParticles){
+      p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 200*dt; p.life -= dt*1.8;
+      ctx.save(); ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(run.poofX+p.x, run.poofY+p.y, p.r*p.life, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    // "*POOF*" text
+    if(run.poofT < 1.2){
+      const alpha = run.poofT < 0.3 ? run.poofT/0.3 : Math.max(0, 1-(run.poofT-0.5)/0.7);
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.font = "bold 28px 'Bangers', cursive";
+      ctx.fillStyle='#FF4820'; ctx.strokeStyle='#3A1800'; ctx.lineWidth=3;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.strokeText('*POOF*', run.poofX, run.poofY - 20 - run.poofT*20);
+      ctx.fillText('*POOF*', run.poofX, run.poofY - 20 - run.poofT*20);
+      ctx.restore();
+    }
+
+    if(run.poofT > 1.4){
+      run.on = false;
+      phase = 'FALL';
+      startFall();
+    }
+  }
+}
+
+// ─── letter fall ─────────────────────────────────────────────────────────────
+function startFall(){
+  fall.on=true; fall.done=false; fall.t0=gT;
+  const w = word.toUpperCase(), n = w.length;
+  const slotW = Math.min(52, (CW-80)/n);
+  const x0 = (CW - n*slotW)/2 + slotW/2;
+  fall.letters = w.split('').map((ch,i)=>({
+    ch, x:x0+i*slotW, y:-50, vy:0,
+    landed:false, started:false,
+    delay:i*.17, bounces:0,
+    rot:0, rdir:(Math.random()>.5?1:-1)*(2+Math.random()*4),
+    color:LCOLORS[i%LCOLORS.length],
+  }));
+  // Reliable fallback timeout
+  setTimeout(()=>{ if(!fall.done){ fall.done=true; showOverlay(); } },
+    n*220 + 3500);
+}
+
+function updateFall(dt){
+  const FLOOR = GROUND_Y - 10;
+  let allDone = true;
+
+  for(const l of fall.letters){
+    if(!l.started){
+      if(gT - fall.t0 >= l.delay) l.started = true;
+      else { allDone=false; continue; }
+    }
+    if(!l.landed){
+      allDone = false;
+      l.vy += 1000*dt;
+      l.y  += l.vy*dt;
+      l.rot += dt*2.5*l.rdir;
+      if(l.y >= FLOOR){
+        l.y = FLOOR; l.vy *= -0.45; l.rot = 0; l.rdir = 0; l.bounces++;
+        if(Math.abs(l.vy) < 200 || l.bounces >= 3){ l.landed=true; l.vy=0; }
+      }
+    }
+    // draw
+    ctx.save();
+    ctx.translate(l.x, l.y);
+    if(!l.landed) ctx.rotate(l.rot);
+    ctx.font = "bold 46px 'Bangers', cursive";
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle=l.color; ctx.strokeStyle='#3A1800'; ctx.lineWidth=5;
+    ctx.strokeText(l.ch,0,0); ctx.fillText(l.ch,0,0);
+    ctx.restore();
+  }
+
+  if(allDone && !fall.done){
+    fall.done = true;
+    setTimeout(showOverlay, 1000);
+  }
+}
+
+// ─── overlay ──────────────────────────────────────────────────────────────────
+function showOverlay(){
+  const win = phase==='WIN';
+  document.getElementById('ov-title').textContent = win ? '🎉 YOU WIN!' : '💨 HE GOT AWAY!';
+  document.getElementById('ov-title').style.color  = win ? '#1A7A1A'   : '#CC2020';
+  document.getElementById('ov-body').innerHTML =
+    `The word was: <strong>${word.toUpperCase()}</strong>`;
+  // replay bounce animation
+  const box = document.getElementById('ov-box');
+  box.style.animation = 'none';
+  void box.offsetWidth;
+  box.style.animation = 'bounceIn .5s cubic-bezier(.175,.885,.32,1.275) both';
+  document.getElementById('overlay').classList.add('on');
+}
+
+// ─── game logic ───────────────────────────────────────────────────────────────
+function guess(letter){
+  if(phase!=='PLAYING') return;
+  const btn = document.querySelector(`.key[data-l="${letter}"]`);
+  if(!btn || btn.disabled) return;
+  btn.disabled = true;
+
+  if(word.includes(letter)){
+    guessed.add(letter);
+    btn.classList.add('hit');
+    updateWord();
+    setMsg(`✓  "${letter.toUpperCase()}" is in the word!`, '#1A6B1A');
+    if(word.split('').every(c=>guessed.has(c))){
+      phase='WIN'; disableAll();
+      flash.on=true; flash.t=0;
+    }
+  } else {
+    btn.classList.add('miss');
+    badCount++;
+    document.getElementById('parts').textContent = badCount;
+    popQueue.push(PARTS[badCount-1]);
+    setMsg(`✗  "${letter.toUpperCase()}" not in word — ${PART_MSGS[badCount-1]}`, '#BB1010');
+
+    if(badCount >= MAX_BAD){
+      phase='RUN'; disableAll();
+      // Immediately reveal the answer in the word display
+      revealWord();
+      setMsg("He's fully built — he's making a run for it!! 🏃💨", '#BB1010');
+      setTimeout(()=>{
+        run.on=true; run.x=CW/2; run.vx=0; run.t=0;
+        run.subphase='sprint'; run.scale=1; run.horizonT=0;
+        run.dust=[]; run.poofParticles=[];
+      }, 900);
+    }
+  }
+}
+
+function revealWord(){
+  // Show the full answer in the HTML word slots (red for wrong letters)
+  const wd = document.getElementById('word-display');
+  wd.innerHTML = '';
+  for(const ch of word){
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.textContent = ch.toUpperCase();
+    d.classList.add(guessed.has(ch) ? 'hit' : 'miss');
+    wd.appendChild(d);
+  }
+}
+
+function updateWord(){
+  const wd = document.getElementById('word-display');
+  wd.innerHTML = '';
+  for(const ch of word){
+    const d = document.createElement('div'); d.className='slot';
+    if(guessed.has(ch)){ d.textContent=ch.toUpperCase(); d.classList.add('hit'); }
+    wd.appendChild(d);
+  }
+  document.getElementById('left').textContent =
+    word.split('').filter(c=>!guessed.has(c)).length;
+}
+
+function setMsg(txt, color='#3A1800'){
+  const el = document.getElementById('message');
+  el.textContent=txt; el.style.color=color;
+  el.style.transform='scale(1.15)';
+  setTimeout(()=>el.style.transform='', 200);
+}
+
+function buildKeyboard(){
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML='';
+  for(const row of ['qwertyuiop','asdfghjkl','zxcvbnm']){
+    const div=document.createElement('div'); div.className='kb-row';
+    for(const ch of row){
+      const btn=document.createElement('button');
+      btn.className='key'; btn.textContent=ch.toUpperCase(); btn.dataset.l=ch;
+      btn.onclick=()=>guess(ch);
+      div.appendChild(btn);
+    }
+    kb.appendChild(div);
+  }
+}
+
+function disableAll(){ document.querySelectorAll('.key').forEach(b=>b.disabled=true); }
+
+document.addEventListener('keydown', e=>{
+  if(e.key.length===1 && /[a-zA-Z]/.test(e.key)) guess(e.key.toLowerCase());
+});
+
+// ─── init ──────────────────────────────────────────────────────────────────────
+function initGame(){
+  document.getElementById('overlay').classList.remove('on');
+  word=WORDS[Math.floor(Math.random()*WORDS.length)];
+  guessed=new Set(); badCount=0; phase='PLAYING';
+  PARTS.forEach(p=>sc[p]=0);
+  popQueue=[]; popPart=null; popT=0;
+  run.on=false; run.dust=[]; run.poofParticles=[];
+  fall.on=false; fall.done=false; fall.letters=[];
+  flash.on=false;
+  document.getElementById('parts').textContent='0';
+  document.getElementById('left').textContent=word.length;
+  setMsg('Pick a letter to start!');
+  buildKeyboard(); updateWord();
+}
+
+initGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
